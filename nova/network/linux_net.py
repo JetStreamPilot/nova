@@ -46,8 +46,8 @@ flags.DEFINE_string('networks_path', '$state_path/networks',
                     'Location to keep network config files')
 flags.DEFINE_string('public_interface', 'eth0',
                     'Interface for public IP addresses')
-flags.DEFINE_string('public_prefix', 32,
-                    'Routing prefix for public IP addresses')
+flags.DEFINE_string('public_gateway', None,
+                    'Gateway for the public IPs')
 flags.DEFINE_string('dhcpbridge', _bin_file('nova-dhcpbridge'),
                         'location of nova-dhcpbridge')
 flags.DEFINE_string('routing_source_ip', '$my_ip',
@@ -69,6 +69,8 @@ flags.DEFINE_string('linuxnet_ovs_integration_bridge',
                     'br-int', 'Name of Open vSwitch bridge used with linuxnet')
 flags.DEFINE_bool('send_arp_for_ha', False,
                   'send gratuitous ARPs for HA setup')
+flags.DEFINE_bool('use_routing_tables', False,
+                  'Install routing tables when binding ips to an interface.')
 flags.DEFINE_bool('use_single_default_gateway',
                    False, 'Use single default gateway. Only first nic of vm'
                           ' will get default gateway from dhcp server')
@@ -390,10 +392,26 @@ def init_host():
 
 def bind_floating_ip(floating_ip, check_exit_code=True):
     """Bind ip to public interface."""
+    net = netaddr.IPNetwork(FLAGS.floating_range)
     _execute('ip', 'addr', 'add',
-            '%s/%s' % (floating_ip, FLAGS.public_prefix),
+            '%s/%s' % (floating_ip, net.prefixlen),
              'dev', FLAGS.public_interface,
              run_as_root=True, check_exit_code=check_exit_code)
+
+    if FLAGS.use_routing_tables:
+        gateway = FLAGS.public_gateway
+        if gateway is None:
+            gateway = net[1]
+
+        _execute('ip', 'route', 'replace', str(net),
+                'dev', FLAGS.public_interface,
+                'table', FLAGS.public_interface,
+                run_as_root=True, check_exit_code=check_exit_code)
+
+        _execute('ip', 'route', 'replace', '0.0.0.0/0', 'via', gateway,
+                 'dev', FLAGS.public_interface, 'table', FLAGS.public_interface,
+                 run_as_root=True, check_exit_code=check_exit_code)
+
     if FLAGS.send_arp_for_ha:
         _execute('arping', '-U', floating_ip,
                  '-A', '-I', FLAGS.public_interface,
@@ -402,8 +420,9 @@ def bind_floating_ip(floating_ip, check_exit_code=True):
 
 def unbind_floating_ip(floating_ip):
     """Unbind a public ip from public interface."""
+    net = netaddr.IPNetwork(FLAGS.floating_range)
     _execute('ip', 'addr', 'del',
-            '%s/%s' % (floating_ip, FLAGS.public_prefix),
+            '%s/%s' % (floating_ip, net.prefixlen),
              'dev', FLAGS.public_interface, run_as_root=True)
 
 
@@ -499,6 +518,19 @@ def initialize_gateway_device(dev, network_ref):
         _execute('ip', '-f', 'inet6', 'addr',
                      'change', network_ref['cidr_v6'],
                      'dev', dev, run_as_root=True)
+
+    if FLAGS.use_routing_tables and dev == FLAGS.flat_network_bridge:
+        net = netaddr.IPNetwork(str(network_ref['cidr']))
+        gateway = net[1]
+
+        _execute('ip', 'route', 'replace', str(net),
+                'dev', dev, 'table', dev,
+                run_as_root=True)
+
+        _execute('ip', 'route', 'replace', '0.0.0.0/0', 'via', gateway,
+                 'dev', dev, 'table', dev,
+                 run_as_root=True)
+
     # NOTE(vish): If the public interface is the same as the
     #             bridge, then the bridge has to be in promiscuous
     #             to forward packets properly.
