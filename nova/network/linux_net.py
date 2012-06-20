@@ -466,9 +466,7 @@ def remove_floating_forward(floating_ip, fixed_ip):
 
 def floating_forward_rules(floating_ip, fixed_ip):
     return [('PREROUTING', '-d %s -j DNAT --to %s' % (floating_ip, fixed_ip)),
-            ('OUTPUT', '-d %s -j DNAT --to %s' % (floating_ip, fixed_ip)),
-            ('float-snat',
-             '-s %s -j SNAT --to %s' % (fixed_ip, floating_ip))]
+            ('OUTPUT', '-d %s -j DNAT --to %s' % (floating_ip, fixed_ip))]
 
 
 def initialize_gateway_device(dev, network_ref):
