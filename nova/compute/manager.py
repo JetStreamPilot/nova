@@ -240,12 +240,13 @@ class ComputeManager(manager.SchedulerDependentManager):
                                                                  instance)
         return network_info
 
-    def _setup_block_device_mapping(self, context, instance_id):
+    def _setup_block_device_mapping(self, context, instance):
         """setup volumes for block device mapping"""
         volume_api = volume.API()
         block_device_mapping = []
         swap = None
         ephemerals = []
+        instance_id = instance['id']
         for bdm in self.db.block_device_mapping_get_all_by_instance(
             context, instance_id):
             LOG.debug(_("setting up bdm %s"), bdm)
@@ -300,7 +301,12 @@ class ComputeManager(manager.SchedulerDependentManager):
                                              'mount_device':
                                              bdm['device_name']})
 
-        return (swap, ephemerals, block_device_mapping)
+        return {
+            'root_device_name': instance['root_device_name'],
+            'swap': swap,
+            'ephemerals': ephemerals,
+            'block_device_mapping': block_device_mapping
+        }
 
     def _run_instance(self, context, instance_id, **kwargs):
         """Launch a new instance with specified options."""
@@ -379,17 +385,6 @@ class ComputeManager(manager.SchedulerDependentManager):
                 LOG.debug(_("instance network_info: |%s|"), network_info)
             return network_info
 
-        def _make_block_device_info():
-            (swap, ephemerals,
-             block_device_mapping) = self._setup_block_device_mapping(
-                context, instance_id)
-            block_device_info = {
-                'root_device_name': instance['root_device_name'],
-                'swap': swap,
-                'ephemerals': ephemerals,
-                'block_device_mapping': block_device_mapping}
-            return block_device_info
-
         def _deallocate_network():
             if not FLAGS.stub_network:
                 LOG.debug(_("deallocating network for instance: %s"),
@@ -446,7 +441,7 @@ class ComputeManager(manager.SchedulerDependentManager):
                                   vm_state=vm_states.BUILDING,
                                   task_state=task_states.BLOCK_DEVICE_MAPPING)
             with _logging_error(instance_id, "block device setup"):
-                block_device_info = _make_block_device_info()
+                block_device_info = self._setup_block_device_mapping(context, instance)
 
             self._instance_update(context,
                                   instance_id,
@@ -582,7 +577,7 @@ class ComputeManager(manager.SchedulerDependentManager):
         instance_ref.injected_files = kwargs.get('injected_files', [])
         network_info = self.network_api.get_instance_nw_info(context,
                                                               instance_ref)
-        bd_mapping = self._setup_block_device_mapping(context, instance_id)[2]
+        device_info = self._setup_block_device_mapping(context, instance_ref)
 
         self._instance_update(context,
                               instance_id,
@@ -593,7 +588,7 @@ class ComputeManager(manager.SchedulerDependentManager):
         instance_ref.admin_pass = kwargs.get('new_pass',
                 utils.generate_password(FLAGS.password_length))
 
-        self.driver.spawn(context, instance_ref, network_info, bd_mapping)
+        self.driver.spawn(context, instance_ref, network_info, device_info)
 
         current_power_state = self._get_power_state(context, instance_ref)
         self._instance_update(context,
