@@ -56,26 +56,26 @@
 #else
     #if $getVar('rescue', False)
         <disk type='file'>
-            <driver type='${driver_type}'/>
+            <driver type='${driver_type}' cache='none'/>
             <source file='${basepath}/disk.rescue'/>
             <target dev='${disk_prefix}a' bus='${disk_bus}'/>
         </disk>
         <disk type='file'>
-            <driver type='${driver_type}'/>
+            <driver type='${driver_type}' cache='none'/>
             <source file='${basepath}/disk'/>
             <target dev='${disk_prefix}b' bus='${disk_bus}'/>
         </disk>
     #else
         #if not ($getVar('ebs_root', False))
         <disk type='file'>
-            <driver type='${driver_type}'/>
+            <driver type='${driver_type}' cache='none'/>
             <source file='${basepath}/disk'/>
             <target dev='${root_device}' bus='${disk_bus}'/>
         </disk>
         #end if
         #if $getVar('local_device', False)
             <disk type='file'>
-                <driver type='${driver_type}'/>
+                <driver type='${driver_type}' cache='none'/>
                 <source file='${basepath}/disk.local'/>
                 <target dev='${local_device}' bus='${disk_bus}'/>
             </disk>
@@ -89,7 +89,7 @@
 	#end for
 	#if $getVar('swap_device', False)
             <disk type='file'>
-                <driver type='${driver_type}'/>
+                <driver type='${driver_type}' cache='none'/>
                 <source file='${basepath}/disk.swap'/>
                 <target dev='${swap_device}' bus='${disk_bus}'/>
             </disk>
@@ -108,7 +108,7 @@
     #end if
     #if $getVar('config_drive', False)
         <disk type='file'>
-            <driver type='raw' />
+            <driver type='raw' cache='none'/>
             <source file='${basepath}/disk.config' />
             <target dev='${disk_prefix}z' bus='${disk_bus}' />
         </disk>
