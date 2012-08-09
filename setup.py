@@ -60,8 +60,6 @@ elif command is None:
 else:
     assert os.path.exists(VFILE), 'version.py does not exist, please set PISTON_VERSION (or run make_version.py for dev purposes)'
 
-
-from nova.utils import parse_mailmap, str_dict_replace
 from nova import version
 
 
