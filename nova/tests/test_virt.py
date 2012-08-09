@@ -15,8 +15,11 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+from nova import exception
 from nova import flags
 from nova import test
+from nova import utils
+from nova.virt import disk
 from nova.virt import driver
 
 FLAGS = flags.FLAGS
@@ -81,3 +84,32 @@ class TestVirtDriver(test.TestCase):
                                                 'swap_size': 0}))
         self.assertTrue(driver.swap_is_usable({'device_name': '/dev/sdb',
                                                 'swap_size': 1}))
+
+
+class TestVirtDisk(test.TestCase):
+    def setUp(self):
+        super(TestVirtDisk, self).setUp()
+
+        real_execute = utils.execute
+
+        def nonroot_execute(*cmd_parts, **kwargs):
+            kwargs.pop('run_as_root', None)
+            return real_execute(*cmd_parts, **kwargs)
+
+        self.stubs.Set(utils, 'execute', nonroot_execute)
+
+    def test_check_safe_path(self):
+        ret = disk._join_and_check_path_within_fs('/foo', 'etc',
+                                                      'something.conf')
+        self.assertEquals(ret, '/foo/etc/something.conf')
+
+    def test_check_unsafe_path(self):
+        self.assertRaises(exception.Invalid,
+                          disk._join_and_check_path_within_fs,
+                          '/foo', 'etc/../../../something.conf')
+
+    def test_inject_files_with_bad_path(self):
+        self.assertRaises(exception.Invalid,
+                          disk._inject_file_into_fs,
+                          '/tmp', '/etc/../../../../etc/passwd',
+                         'hax')
